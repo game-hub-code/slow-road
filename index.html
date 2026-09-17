@@ -31,21 +31,33 @@
 <script src="./static/js/main.e7a33c55.chunk.js">
 </script>
 <script>
-  // Auto-skip the opening/start screen
+  // Auto-skip the "slow roads" intro screen by clicking the "begin" button
+  // as soon as it appears in the DOM.
   (function () {
     var attempts = 0;
-    var maxAttempts = 100; // ~10s at 100ms interval
+    var maxAttempts = 150; // ~15s at 100ms interval, generous for slow loads
+
+    function findBeginButton() {
+      // Look through clickable-ish elements for exact text "begin"
+      var candidates = document.querySelectorAll('button, div, span, a');
+      for (var i = 0; i < candidates.length; i++) {
+        var text = candidates[i].textContent.trim().toLowerCase();
+        if (text === 'begin') {
+          return candidates[i];
+        }
+      }
+      return null;
+    }
+
     var poll = setInterval(function () {
       attempts++;
+      var beginBtn = findBeginButton();
 
-      // TODO: replace this selector with the real one from DevTools
-      var startBtn = document.querySelector('SELECTOR_FOR_START_BUTTON');
-
-      if (startBtn) {
-        startBtn.click();
+      if (beginBtn) {
+        beginBtn.click();
         clearInterval(poll);
       } else if (attempts >= maxAttempts) {
-        clearInterval(poll); // give up, avoid an infinite loop
+        clearInterval(poll); // stop trying, avoid infinite loop
       }
     }, 100);
   })();
