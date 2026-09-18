@@ -113,6 +113,31 @@
     if (panelLeft < 0) panelLeft = 0;
     panel.style.cssText = 'display:none; left:' + panelLeft + 'px; width:220px; padding-top:6px; margin-top:-6px;';
     panel.innerHTML = `
+      <style>
+        /* Bug fix: on first paint after page load, Chromium briefly renders the native
+           input[type=color] swatch decoration (shows as a small "?" glyph) before our
+           inline border/background overrides are applied on top of it — a one-frame FOUC
+           that only happens on cold load, matching the reported symptom. Forcing
+           -webkit-appearance:none and rebuilding the swatch box ourselves removes the
+           native decoration entirely instead of racing it. */
+        #cp-col1, #cp-col2, #cp-col3 {
+          -webkit-appearance: none;
+          appearance: none;
+          padding: 0;
+        }
+        #cp-col1::-webkit-color-swatch-wrapper,
+        #cp-col2::-webkit-color-swatch-wrapper,
+        #cp-col3::-webkit-color-swatch-wrapper {
+          padding: 0;
+          border: none;
+        }
+        #cp-col1::-webkit-color-swatch,
+        #cp-col2::-webkit-color-swatch,
+        #cp-col3::-webkit-color-swatch {
+          border: none;
+          border-radius: 4px;
+        }
+      </style>
       <div class="menu-panel-title">Car Colour</div>
       <div class="menu-panel-choice-row">
         <div class="menu-panel-choice-option choice-selected" id="cp-tab-flat" onclick="cpTab('flat')">Solid</div>
@@ -125,7 +150,7 @@
         </div>
         <div id="cp-grad-row" style="display:none; align-items:center; justify-content:center; gap:8px;">
           <input type="color" id="cp-col2" value="#1a1aff" style="width:36px;height:32px;border:none;background:none;cursor:pointer;">
-          <svg width="30" height="16" style="flex-shrink:0"><defs><linearGradient id="pg"><stop offset="0%" stop-color="#ffffff"/><stop id="pg2" offset="100%" stop-color="#1a1aff"/></linearGradient></defs><rect width="30" height="16" fill="url(#pg)" rx="3"/></svg>
+          <svg width="30" height="16" style="flex-shrink:0"><defs><linearGradient id="pg"><stop offset="0%" stop-color="#1a1aff"/><stop id="pg2" offset="100%" stop-color="#ff2200"/></linearGradient></defs><rect width="30" height="16" fill="url(#pg)" rx="3"/></svg>
           <input type="color" id="cp-col3" value="#ff2200" style="width:36px;height:32px;border:none;background:none;cursor:pointer;">
         </div>
       </div>
@@ -168,6 +193,68 @@
       var col2 = document.getElementById('cp-col2').value;
       var col3 = document.getElementById('cp-col3').value;
 
+      // Rewritten to fix two things at once:
+      // 1) "gradient not smooth" — the old code baked a 1x256 (or texture-image-sized)
+      //    canvas gradient and mapped it via each mesh's OWN uv layout. That only looks
+      //    right if a mesh has a single continuous top-to-bottom uv strip; the bus/mono
+      //    bodies (and possibly others) don't, so the "gradient" came out as flat/banded
+      //    colour. A GPU vertex shader instead reads each vertex's actual local Y
+      //    position — always continuous and correct regardless of how the mesh was
+      //    UV-unwrapped — and blends per-pixel in the fragment shader, which is smooth
+      //    by construction.
+      // 2) "specific to one vehicle" — the old code had a special CPU pixel-loop path
+      //    (recolorBodyTexture) just for the player car's baked livery texture, plus a
+      //    separate canvas-texture path for everything else. Replaced with ONE function
+      //    used for every matched mesh on every vehicle: if the material already has a
+      //    baked texture (only the player car does, currently), the shader masks by
+      //    that texture's own brightness so windows/trim stay untouched; otherwise it
+      //    just paints the whole mesh. Same code path, no per-vehicle special-casing.
+      function applyVehiclePaint(obj, isGradient, flatColor, topColor, bottomColor) {
+        var mat = obj.material;
+        var u = mat.userData._cpUniforms;
+        if (!u) {
+          var geo = obj.geometry;
+          if (!geo.boundingBox) geo.computeBoundingBox();
+          var minY = geo.boundingBox.min.y, maxY = geo.boundingBox.max.y;
+          var ColorCtor = mat.color.constructor;
+          u = {
+            cpMinY: { value: minY },
+            cpMaxY: { value: Math.max(maxY, minY + 0.0001) },
+            cpFlat: { value: new ColorCtor(1, 1, 1) },
+            cpTop: { value: new ColorCtor(1, 1, 1) },
+            cpBottom: { value: new ColorCtor(1, 1, 1) },
+            cpIsGrad: { value: 0 },
+            // Only mask by brightness when this material has a baked livery texture
+            // (the player car's body). Untextured traffic-vehicle bodies (bus, mono)
+            // have nothing to mask against, so they're painted in full.
+            cpMaskByLuma: { value: mat.map ? 1 : 0 }
+          };
+          mat.onBeforeCompile = function(shader) {
+            Object.assign(shader.uniforms, u);
+            shader.vertexShader = shader.vertexShader
+              .replace('#include <common>',
+                '#include <common>\nvarying float cpVY;\nuniform float cpMinY, cpMaxY;')
+              .replace('#include <begin_vertex>',
+                '#include <begin_vertex>\ncpVY = clamp((position.y - cpMinY) / (cpMaxY - cpMinY), 0.0, 1.0);');
+            shader.fragmentShader = shader.fragmentShader
+              .replace('#include <common>',
+                '#include <common>\nvarying float cpVY;\nuniform vec3 cpFlat, cpTop, cpBottom;\nuniform float cpIsGrad, cpMaskByLuma;')
+              .replace('#include <color_fragment>',
+                '#include <color_fragment>\n' +
+                'float cpLuma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));\n' +
+                'float cpIsPaint = mix(1.0, step(0.745, cpLuma), cpMaskByLuma);\n' +
+                'vec3 cpPaintColor = mix(cpFlat, mix(cpBottom, cpTop, cpVY), cpIsGrad);\n' +
+                'diffuseColor.rgb = mix(diffuseColor.rgb, cpPaintColor, cpIsPaint);');
+          };
+          mat.userData._cpUniforms = u;
+          mat.needsUpdate = true; // compile the custom shader once; later calls just update uniforms below
+        }
+        u.cpFlat.value.set(flatColor);
+        u.cpTop.value.set(topColor);
+        u.cpBottom.value.set(bottomColor);
+        u.cpIsGrad.value = isGradient ? 1 : 0;
+      }
+
       scene.traverse(function(obj) {
         if (!obj.isMesh || !obj.material || !obj.material.color) return;
         try {
@@ -175,57 +262,20 @@
         // every car part (body, lights, shadow, wheels) has a real .name starting
         // with 'z_' or '(f|b)wheel_'. Every terrain/road/foliage/sky mesh is
         // '(unnamed)'. Roadside markers ('vergemarker_...') are named but a distinct
-        // prefix, so they're excluded too. This replaces the earlier bounding-sphere /
-        // onBeforeCompile / userData heuristics, which all proved unreliable.
+        // prefix, so they're excluded too.
+        // Traffic vehicles use their own .obj files with different naming — the bus body
+        // is 'bus-02_body_...' and the motorbike body is 'm2_body_...' (verified against
+        // bus-02.obj / mono_2.obj). Add their body-mesh prefixes explicitly (not their
+        // windows/lights/shadow parts, same restraint as the player car).
         var nm = obj.name || '';
-        if (!(nm.indexOf('z_') === 0 || nm.indexOf('bwheel_') === 0 || nm.indexOf('fwheel_') === 0)) return;
-        // TEMP: log every part actually being recolored, so we can spot the window
-        // part's exact name and exclude it. Remove once identified.
-        if (!window._cpNamesLogged) { window._cpNamesSeen = window._cpNamesSeen || []; window._cpNamesSeen.push(nm); }
+        if (!(nm.indexOf('z_') === 0 || nm.indexOf('bwheel_') === 0 || nm.indexOf('fwheel_') === 0
+            || nm.indexOf('bus-02_body') === 0 || nm.indexOf('m2_body') === 0)) return;
 
-        if (!isGrad) {
-          obj.material.map = null;
-          obj.material.color.set(col1);
-        } else {
-          var c = document.createElement('canvas');
-          c.width = 1; c.height = 256;
-          var ctx = c.getContext('2d');
-          var g = ctx.createLinearGradient(0,0,0,256);
-          g.addColorStop(0, col2);
-          g.addColorStop(1, col3);
-          ctx.fillStyle = g;
-          ctx.fillRect(0,0,1,256);
-          // No direct THREE reference available — reuse an existing texture instance's
-          // constructor from any material already in the scene, clone + repaint it.
-          var TextureCtor = null;
-          scene.traverse(function(o2) {
-            if (TextureCtor) return;
-            if (o2.isMesh && o2.material && o2.material.map) TextureCtor = o2.material.map.constructor;
-          });
-          if (TextureCtor) {
-            var tex = new TextureCtor(c);
-            tex.needsUpdate = true;
-            obj.material.map = tex;
-          } else {
-            // Fallback: no texture constructor found anywhere — blend the two colors flat
-            var r1=parseInt(col2.slice(1,3),16), g1=parseInt(col2.slice(3,5),16), b1=parseInt(col2.slice(5,7),16);
-            var r2=parseInt(col3.slice(1,3),16), g2=parseInt(col3.slice(3,5),16), b2=parseInt(col3.slice(5,7),16);
-            var mix = '#' + Math.round((r1+r2)/2).toString(16).padStart(2,'0') + Math.round((g1+g2)/2).toString(16).padStart(2,'0') + Math.round((b1+b2)/2).toString(16).padStart(2,'0');
-            obj.material.map = null;
-            obj.material.color.set(mix);
-          }
-          if (obj.material.map) obj.material.color.set('#ffffff');
-        }
-        obj.material.needsUpdate = true;
+        applyVehiclePaint(obj, isGrad, col1, col2, col3);
         } catch (err) {
-          // ponytail: never let one bad mesh abort traversal for the rest of the scene
           console.warn('[color-picker] skipped mesh due to error', err);
         }
       });
-      if (!window._cpNamesLogged && window._cpNamesSeen) {
-        window._cpNamesLogged = true;
-        console.log('[color-picker] parts recolored:', window._cpNamesSeen);
-      }
     }
   }, 300);
 })();
