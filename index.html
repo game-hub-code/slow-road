@@ -170,12 +170,11 @@
 
       scene.traverse(function(obj) {
         if (!obj.isMesh || !obj.material || !obj.material.color) return;
-        // ponytail: target only car body — skip terrain/road/sky via geometry bounding sphere (no THREE needed)
-        var geo = obj.geometry;
-        if (geo) {
-          if (!geo.boundingSphere) geo.computeBoundingSphere();
-          if (geo.boundingSphere && geo.boundingSphere.radius > 5) return; // skip large world meshes
-        }
+        // ponytail: skip any material with a custom onBeforeCompile (terrain/sky/water/foliage
+        // all get one; the car material doesn't). Bounding-sphere radius false-matched small
+        // foliage meshes and nulling their .map killed USE_MAP, breaking their hardcoded
+        // map_fragment shader replacement (undeclared 'map'/'vUv' -> shader compile error).
+        if (obj.material.onBeforeCompile) return;
 
         if (!isGrad) {
           obj.material.map = null;
