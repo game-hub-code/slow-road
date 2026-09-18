@@ -107,7 +107,11 @@
     var panel = document.createElement('div');
     panel.id = 'color-picker-panel';
     panel.className = 'menu-panel';
-    panel.style.cssText = 'display:none; left:' + (bar.children.length * 50 - 50) + 'px; width:220px; padding-top:6px; margin-top:-6px;';
+    var btnIndex = Array.prototype.indexOf.call(bar.children, btn);
+    var btnLeft = btnIndex * 50;
+    var panelLeft = btnLeft + 25 - 110; // center 220px panel under bucket's center
+    if (panelLeft < 0) panelLeft = 0;
+    panel.style.cssText = 'display:none; left:' + panelLeft + 'px; width:220px; padding-top:6px; margin-top:-6px;';
     panel.innerHTML = `
       <div class="menu-panel-title">Car Colour</div>
       <div class="menu-panel-choice-row">
