@@ -26,20 +26,17 @@
 <div id="root">
 </div>
 <script>
-  // Monkey-patch WebGLRenderer to capture scene on first render
-  var _origRender;
-  Object.defineProperty(window, 'THREE', {
-    set: function(v) {
-      window._THREE = v;
-      var proto = v.WebGLRenderer.prototype;
-      _origRender = proto.render;
-      proto.render = function(scene, cam) {
-        if (!window._carScene) window._carScene = scene;
-        _origRender.call(this, scene, cam);
-      };
-    },
-    get: function() { return window._THREE; }
-  });
+Object.defineProperty(window,'THREE',{
+  set:function(v){
+    window._THREE=v;
+    var orig=v.WebGLRenderer.prototype.render;
+    v.WebGLRenderer.prototype.render=function(s,c){
+      if(!window._carScene)window._carScene=s;
+      orig.call(this,s,c);
+    };
+  },
+  get:function(){return window._THREE;}
+});
 </script>
 <script>!function(e){function r(r){for(var n,a,i=r[0],c=r[1],l=r[2],f=0,s=[];f<i.length;f++)a=i[f],Object.prototype.hasOwnProperty.call(o,a)&&o[a]&&s.push(o[a][0]),o[a]=0;for(n in c)Object.prototype.hasOwnProperty.call(c,n)&&(e[n]=c[n]);for(p&&p(r);s.length;)s.shift()();return u.push.apply(u,l||[]),t()}function t(){for(var e,r=0;r<u.length;r++){for(var t=u[r],n=!0,i=1;i<t.length;i++){var c=t[i];0!==o[c]&&(n=!1)}n&&(u.splice(r--,1),e=a(a.s=t[0]))}return e}var n={},o={1:0},u=[];function a(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,a),t.l=!0,t.exports}a.e=function(e){var r=[],t=o[e];if(0!==t)if(t)r.push(t[2]);else{var n=new Promise((function(r,n){t=o[e]=[r,n]}));r.push(t[2]=n);var u,i=document.createElement("script");i.charset="utf-8",i.timeout=120,a.nc&&i.setAttribute("nonce",a.nc),i.src=function(e){return a.p+"static/js/"+({}[e]||e)+"."+{3:"98d9946c"}[e]+".chunk.js"}(e);var c=new Error;u=function(r){i.onerror=i.onload=null,clearTimeout(l);var t=o[e];if(0!==t){if(t){var n=r&&("load"===r.type?"missing":r.type),u=r&&r.target&&r.target.src;c.message="Loading chunk "+e+" failed.\n("+n+": "+u+")",c.name="ChunkLoadError",c.type=n,c.request=u,t[1](c)}o[e]=void 0}};var l=setTimeout((function(){u({type:"timeout",target:i})}),12e4);i.onerror=i.onload=u,document.head.appendChild(i)}return Promise.all(r)},a.m=e,a.c=n,a.d=function(e,r,t){a.o(e,r)||Object.defineProperty(e,r,{enumerable:!0,get:t})},a.r=function(e){"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0})},a.t=function(e,r){if(1&r&&(e=a(e)),8&r)return e;if(4&r&&"object"==typeof e&&e&&e.__esModule)return e;var t=Object.create(null);if(a.r(t),Object.defineProperty(t,"default",{enumerable:!0,value:e}),2&r&&"string"!=typeof e)for(var n in e)a.d(t,n,function(r){return e[r]}.bind(null,n));return t},a.n=function(e){var r=e&&e.__esModule?function(){return e.default}:function(){return e};return a.d(r,"a",r),r},a.o=function(e,r){return Object.prototype.hasOwnProperty.call(e,r)},a.p="./",a.oe=function(e){throw console.error(e),e};var i=this.webpackJsonpapp=this.webpackJsonpapp||[],c=i.push.bind(i);i.push=r,i=i.slice();for(var l=0;l<i.length;l++)r(i[l]);var p=c;t()}([])</script>
 <script src="./static/js/2.f5fa8177.chunk.js">
@@ -47,107 +44,108 @@
 <script src="./static/js/main.e7a33c55.chunk.js">
 </script>
 <script>
-  // Auto-skip the "slow roads" intro screen by clicking the "begin" button
-  // as soon as it appears in the DOM.
-  (function () {
-    var attempts = 0;
-    var maxAttempts = 150; // ~15s at 100ms interval, generous for slow loads
+(function() {
+  // Wait for game UI to mount
+  var t = setInterval(function() {
+    var bar = document.getElementById('menu-bar-left');
+    if (!bar) return;
+    clearInterval(t);
 
-    function findBeginButton() {
-      // Look through clickable-ish elements for exact text "begin"
-      var candidates = document.querySelectorAll('button, div, span, a');
-      for (var i = 0; i < candidates.length; i++) {
-        var text = candidates[i].textContent.trim().toLowerCase();
-        if (text === 'begin') {
-          return candidates[i];
-        }
-      }
-      return null;
-    }
+    // --- Bucket icon button (matches .menu-item style) ---
+    var btn = document.createElement('div');
+    btn.id = 'color-picker-btn';
+    btn.className = 'menu-item';
+    btn.title = 'Car colour';
+    btn.innerHTML = '<svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C8 2 4 6 4 10c0 5 8 12 8 12s8-7 8-12c0-4-3.6-8-8-8z"/><circle cx="12" cy="10" r="3"/></svg>';
+    bar.appendChild(btn);
 
-    var poll = setInterval(function () {
-      attempts++;
-      var beginBtn = findBeginButton();
+    // --- Panel (matches .menu-panel style) ---
+    var panel = document.createElement('div');
+    panel.id = 'color-picker-panel';
+    panel.className = 'menu-panel';
+    panel.style.cssText = 'display:none; left:' + (bar.children.length * 50 - 50) + 'px; width:220px;';
+    panel.innerHTML = `
+      <div class="menu-panel-title">Car Colour</div>
+      <div class="menu-panel-choice-row">
+        <div class="menu-panel-choice-option choice-selected" id="cp-tab-flat" onclick="cpTab('flat')">Solid</div>
+        <div class="menu-panel-choice-option" id="cp-tab-grad" onclick="cpTab('grad')">Gradient</div>
+      </div>
+      <div class="menu-panel-row" style="height:80px; flex-direction:column; gap:8px;">
+        <div id="cp-flat-row" style="display:flex; align-items:center; justify-content:center; gap:12px;">
+          <span style="font-family:Jura;color:hsla(0,0%,100%,0.73);font-size:13px;">Colour</span>
+          <input type="color" id="cp-col1" value="#ffffff" style="width:40px;height:32px;border:none;background:none;cursor:pointer;">
+        </div>
+        <div id="cp-grad-row" style="display:none; align-items:center; justify-content:center; gap:8px;">
+          <input type="color" id="cp-col2" value="#1a1aff" style="width:36px;height:32px;border:none;background:none;cursor:pointer;">
+          <svg width="30" height="16" style="flex-shrink:0"><defs><linearGradient id="pg"><stop offset="0%" stop-color="#ffffff"/><stop id="pg2" offset="100%" stop-color="#1a1aff"/></linearGradient></defs><rect width="30" height="16" fill="url(#pg)" rx="3"/></svg>
+          <input type="color" id="cp-col3" value="#ff2200" style="width:36px;height:32px;border:none;background:none;cursor:pointer;">
+        </div>
+      </div>
+    `;
+    document.getElementById('menu-bar').appendChild(panel);
 
-      if (beginBtn) {
-        beginBtn.click();
-        clearInterval(poll);
-      } else if (attempts >= maxAttempts) {
-        clearInterval(poll); // stop trying, avoid infinite loop
-      }
-    }, 100);
-  })();
-</script>
-<script>
-  // Color picker — inject after game canvas is ready
-  (function () {
-    function injectPicker() {
-      var ui = document.createElement('div');
-      ui.id = 'car-color-picker';
-      ui.innerHTML = `
-        <select id="cp-mode" style="margin-bottom:4px">
-          <option value="flat">Solid</option>
-          <option value="gradient">Gradient</option>
-        </select>
-        <input type="color" id="cp-col1" value="#ffffff">
-        <input type="color" id="cp-col2" value="#ff0000" style="display:none">
-      `;
-      ui.style.cssText = 'position:fixed;bottom:18px;left:160px;z-index:9999;background:rgba(0,0,0,.5);padding:6px;border-radius:6px;display:flex;flex-direction:column;align-items:center';
-      document.body.appendChild(ui);
+    // --- Toggle panel ---
+    btn.onclick = function() {
+      panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+    };
 
-      document.getElementById('cp-mode').addEventListener('change', function(e) {
-        document.getElementById('cp-col2').style.display = e.target.value === 'gradient' ? 'inline' : 'none';
-      });
+    // --- Tab switch ---
+    window.cpTab = function(mode) {
+      document.getElementById('cp-flat-row').style.display = mode === 'flat' ? 'flex' : 'none';
+      document.getElementById('cp-grad-row').style.display = mode === 'grad' ? 'flex' : 'none';
+      document.getElementById('cp-tab-flat').className = 'menu-panel-choice-option' + (mode==='flat'?' choice-selected':'');
+      document.getElementById('cp-tab-grad').className  = 'menu-panel-choice-option' + (mode==='grad'?' choice-selected':'');
+      applyCarColor();
+    };
 
-      // wire color change -> Three.js scene
-      ['cp-col1','cp-col2'].forEach(function(id) {
-        document.getElementById(id).addEventListener('input', applyColor);
-      });
-    }
+    // --- Color inputs -> car ---
+    ['cp-col1','cp-col2','cp-col3'].forEach(function(id) {
+      document.getElementById(id).addEventListener('input', applyCarColor);
+    });
 
-    function applyColor() {
-      var mode = document.getElementById('cp-mode').value;
+    // Sync gradient preview swatch
+    document.getElementById('cp-col2').addEventListener('input', function() {
+      document.querySelector('#pg stop').setAttribute('stop-color', this.value);
+    });
+    document.getElementById('cp-col3').addEventListener('input', function() {
+      document.getElementById('pg2').setAttribute('stop-color', this.value);
+    });
+
+    function applyCarColor() {
+      var scene = window._carScene;
+      if (!scene) return;
+      var isGrad = document.getElementById('cp-tab-grad').classList.contains('choice-selected');
       var col1 = document.getElementById('cp-col1').value;
       var col2 = document.getElementById('cp-col2').value;
-      var canvas = document.querySelector('canvas');
-      if (!canvas) return;
-
-      // Three.js exposes renderer on canvas.__r3f or via traversal
-      // ponytail: traverse scene, find car meshes by largest bounding box or name
-      var scene = window.__THREE_DEVTOOLS__?.scenes?.[0];  // devtools hook (unreliable)
-      if (!scene) return; // TODO: find reliable scene ref
+      var col3 = document.getElementById('cp-col3').value;
 
       scene.traverse(function(obj) {
-        if (obj.isMesh && obj.material && obj.material.color) {
-          if (mode === 'flat') {
-            obj.material.color.set(col1);
-            obj.material.map = null;
-          } else {
-            // gradient via canvas texture
-            var c = document.createElement('canvas');
-            c.width = 2; c.height = 128;
-            var ctx = c.getContext('2d');
-            var g = ctx.createLinearGradient(0, 0, 0, 128);
-            g.addColorStop(0, col1);
-            g.addColorStop(1, col2);
-            ctx.fillStyle = g;
-            ctx.fillRect(0, 0, 2, 128);
-            obj.material.map = new THREE.CanvasTexture(c);
-            obj.material.color.set('#ffffff');
-          }
-          obj.material.needsUpdate = true;
+        if (!obj.isMesh || !obj.material || !obj.material.color) return;
+        // ponytail: target only car body — skip terrain/road/sky by checking mesh size
+        var box = new window._THREE.Box3().setFromObject(obj);
+        var size = box.getSize(new window._THREE.Vector3());
+        if (size.y > 10 || size.x > 20) return; // skip large world meshes
+
+        if (!isGrad) {
+          obj.material.map = null;
+          obj.material.color.set(col1);
+        } else {
+          var c = document.createElement('canvas');
+          c.width = 1; c.height = 256;
+          var ctx = c.getContext('2d');
+          var g = ctx.createLinearGradient(0,0,0,256);
+          g.addColorStop(0, col2);
+          g.addColorStop(1, col3);
+          ctx.fillStyle = g;
+          ctx.fillRect(0,0,1,256);
+          obj.material.map = new window._THREE.CanvasTexture(c);
+          obj.material.color.set('#ffffff');
         }
+        obj.material.needsUpdate = true;
       });
     }
-
-    // wait for game to boot
-    var t = setInterval(function() {
-      if (document.querySelector('canvas')) {
-        clearInterval(t);
-        injectPicker();
-      }
-    }, 500);
-  })();
+  }, 300);
+})();
 </script>
 </body>
 </html>
