@@ -1,4 +1,4 @@
-  <!doctype html>
+<!doctype html>
 <html lang="en">
   <head>meta charset="utf-8"/>link rel="icon" href="./favicon_circle.svg"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -56,14 +56,14 @@ Object.defineProperty(window,'THREE',{
     btn.id = 'color-picker-btn';
     btn.className = 'menu-item';
     btn.title = 'Car colour';
-    btn.innerHTML = '<svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2C8 2 4 6 4 10c0 5 8 12 8 12s8-7 8-12c0-4-3.6-8-8-8z"/><circle cx="12" cy="10" r="3"/></svg>';
+    btn.innerHTML = '<svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 11l-8-8-8.5 8.5a5 5 0 0 0 7 7L19 11z"/><path d="M5 2l17 17"/></svg>';
     bar.appendChild(btn);
 
     // --- Panel (matches .menu-panel style) ---
     var panel = document.createElement('div');
     panel.id = 'color-picker-panel';
     panel.className = 'menu-panel';
-    panel.style.cssText = 'display:none; left:' + (bar.children.length * 50 - 50) + 'px; width:220px;';
+    panel.style.cssText = 'display:none; left:' + (bar.children.length * 50 - 50) + 'px; width:220px; padding-top:6px; margin-top:-6px;';
     panel.innerHTML = `
       <div class="menu-panel-title">Car Colour</div>
       <div class="menu-panel-choice-row">
@@ -84,10 +84,11 @@ Object.defineProperty(window,'THREE',{
     `;
     document.getElementById('menu-bar').appendChild(panel);
 
-    // --- Toggle panel ---
-    btn.onclick = function() {
-      panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
-    };
+    // --- Hover to open (match other icons) ---
+    btn.onmouseenter = function() { panel.style.display = 'flex'; };
+    btn.onmouseleave = function() { panel.style.display = 'none'; };
+    panel.onmouseenter = function() { panel.style.display = 'flex'; };
+    panel.onmouseleave = function() { panel.style.display = 'none'; };
 
     // --- Tab switch ---
     window.cpTab = function(mode) {
