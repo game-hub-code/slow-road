@@ -45,6 +45,33 @@ Object.defineProperty(window,'THREE',{
 </script>
 <script>
 (function() {
+  // --- Auto-skip splash screen ---
+  var skip = setInterval(function() {
+    var beginBtn = document.querySelector('.splash-ready') ||
+      Array.from(document.querySelectorAll('div')).find(function(d){ return d.textContent.trim() === 'begin'; });
+    if (beginBtn) {
+      clearInterval(skip);
+      beginBtn.click();
+    }
+  }, 200);
+  setTimeout(function(){ clearInterval(skip); }, 15000); // give up after 15s
+
+  // --- Hide donate button/link (matches short "donate" text nodes only) ---
+  var hideDonate = setInterval(function() {
+    var found = false;
+    document.querySelectorAll('div, a, button').forEach(function(el) {
+      if (el.children.length === 0) {
+        var txt = (el.textContent || '').trim().toLowerCase();
+        if (txt === 'donate' || txt === 'donations keep the game running!') {
+          el.style.display = 'none';
+          found = true;
+        }
+      }
+    });
+    if (found) clearInterval(hideDonate);
+  }, 300);
+  setTimeout(function(){ clearInterval(hideDonate); }, 15000);
+
   // Wait for game UI to mount
   var t = setInterval(function() {
     var bar = document.getElementById('menu-bar-left');
@@ -56,7 +83,7 @@ Object.defineProperty(window,'THREE',{
     btn.id = 'color-picker-btn';
     btn.className = 'menu-item';
     btn.title = 'Car colour';
-    btn.innerHTML = '<svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 11l-8-8-8.5 8.5a5 5 0 0 0 7 7L19 11z"/><path d="M5 2l17 17"/></svg>';
+    btn.innerHTML = '<svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 8h16l-1.5 11a2 2 0 0 1-2 1.8H7.5a2 2 0 0 1-2-1.8L4 8z"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/><path d="M4 8h16" stroke-width="2"/></svg>';
     bar.appendChild(btn);
 
     // --- Panel (matches .menu-panel style) ---
