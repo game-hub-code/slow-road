@@ -179,6 +179,9 @@
         // onBeforeCompile / userData heuristics, which all proved unreliable.
         var nm = obj.name || '';
         if (!(nm.indexOf('z_') === 0 || nm.indexOf('bwheel_') === 0 || nm.indexOf('fwheel_') === 0)) return;
+        // TEMP: log every part actually being recolored, so we can spot the window
+        // part's exact name and exclude it. Remove once identified.
+        if (!window._cpNamesLogged) { window._cpNamesSeen = window._cpNamesSeen || []; window._cpNamesSeen.push(nm); }
 
         if (!isGrad) {
           obj.material.map = null;
@@ -219,6 +222,10 @@
           console.warn('[color-picker] skipped mesh due to error', err);
         }
       });
+      if (!window._cpNamesLogged && window._cpNamesSeen) {
+        window._cpNamesLogged = true;
+        console.log('[color-picker] parts recolored:', window._cpNamesSeen);
+      }
     }
   }, 300);
 })();
