@@ -26,17 +26,15 @@
 <div id="root">
 </div>
 <script>
-Object.defineProperty(window,'THREE',{
-  set:function(v){
-    window._THREE=v;
-    var orig=v.WebGLRenderer.prototype.render;
-    v.WebGLRenderer.prototype.render=function(s,c){
-      if(!window._carScene)window._carScene=s;
-      orig.call(this,s,c);
-    };
-  },
-  get:function(){return window._THREE;}
-});
+(function() {
+  // three.js devtools hook — fires 'observe' with detail=renderer/scene/object instances
+  window.__THREE_DEVTOOLS__ = new EventTarget();
+  window._threeObjects = [];
+  window.__THREE_DEVTOOLS__.addEventListener('observe', function(e) {
+    window._threeObjects.push(e.detail);
+    if (e.detail && e.detail.isScene) window._carScene = e.detail;
+  });
+})();
 </script>
 <script>!function(e){function r(r){for(var n,a,i=r[0],c=r[1],l=r[2],f=0,s=[];f<i.length;f++)a=i[f],Object.prototype.hasOwnProperty.call(o,a)&&o[a]&&s.push(o[a][0]),o[a]=0;for(n in c)Object.prototype.hasOwnProperty.call(c,n)&&(e[n]=c[n]);for(p&&p(r);s.length;)s.shift()();return u.push.apply(u,l||[]),t()}function t(){for(var e,r=0;r<u.length;r++){for(var t=u[r],n=!0,i=1;i<t.length;i++){var c=t[i];0!==o[c]&&(n=!1)}n&&(u.splice(r--,1),e=a(a.s=t[0]))}return e}var n={},o={1:0},u=[];function a(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,a),t.l=!0,t.exports}a.e=function(e){var r=[],t=o[e];if(0!==t)if(t)r.push(t[2]);else{var n=new Promise((function(r,n){t=o[e]=[r,n]}));r.push(t[2]=n);var u,i=document.createElement("script");i.charset="utf-8",i.timeout=120,a.nc&&i.setAttribute("nonce",a.nc),i.src=function(e){return a.p+"static/js/"+({}[e]||e)+"."+{3:"98d9946c"}[e]+".chunk.js"}(e);var c=new Error;u=function(r){i.onerror=i.onload=null,clearTimeout(l);var t=o[e];if(0!==t){if(t){var n=r&&("load"===r.type?"missing":r.type),u=r&&r.target&&r.target.src;c.message="Loading chunk "+e+" failed.\n("+n+": "+u+")",c.name="ChunkLoadError",c.type=n,c.request=u,t[1](c)}o[e]=void 0}};var l=setTimeout((function(){u({type:"timeout",target:i})}),12e4);i.onerror=i.onload=u,document.head.appendChild(i)}return Promise.all(r)},a.m=e,a.c=n,a.d=function(e,r,t){a.o(e,r)||Object.defineProperty(e,r,{enumerable:!0,get:t})},a.r=function(e){"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0})},a.t=function(e,r){if(1&r&&(e=a(e)),8&r)return e;if(4&r&&"object"==typeof e&&e&&e.__esModule)return e;var t=Object.create(null);if(a.r(t),Object.defineProperty(t,"default",{enumerable:!0,value:e}),2&r&&"string"!=typeof e)for(var n in e)a.d(t,n,function(r){return e[r]}.bind(null,n));return t},a.n=function(e){var r=e&&e.__esModule?function(){return e.default}:function(){return e};return a.d(r,"a",r),r},a.o=function(e,r){return Object.prototype.hasOwnProperty.call(e,r)},a.p="./",a.oe=function(e){throw console.error(e),e};var i=this.webpackJsonpapp=this.webpackJsonpapp||[],c=i.push.bind(i);i.push=r,i=i.slice();for(var l=0;l<i.length;l++)r(i[l]);var p=c;t()}([])</script>
 <script src="./static/js/2.f5fa8177.chunk.js">
@@ -160,7 +158,7 @@ Object.defineProperty(window,'THREE',{
 
     function applyCarColor() {
       var scene = window._carScene;
-      if (!scene) return;
+      if (!scene) { console.warn('[color-picker] no scene captured yet — window._threeObjects:', window._threeObjects); return; }
       var isGrad = document.getElementById('cp-tab-grad').classList.contains('choice-selected');
       var col1 = document.getElementById('cp-col1').value;
       var col2 = document.getElementById('cp-col2').value;
@@ -168,10 +166,12 @@ Object.defineProperty(window,'THREE',{
 
       scene.traverse(function(obj) {
         if (!obj.isMesh || !obj.material || !obj.material.color) return;
-        // ponytail: target only car body — skip terrain/road/sky by checking mesh size
-        var box = new window._THREE.Box3().setFromObject(obj);
-        var size = box.getSize(new window._THREE.Vector3());
-        if (size.y > 10 || size.x > 20) return; // skip large world meshes
+        // ponytail: target only car body — skip terrain/road/sky via geometry bounding sphere (no THREE needed)
+        var geo = obj.geometry;
+        if (geo) {
+          if (!geo.boundingSphere) geo.computeBoundingSphere();
+          if (geo.boundingSphere && geo.boundingSphere.radius > 5) return; // skip large world meshes
+        }
 
         if (!isGrad) {
           obj.material.map = null;
@@ -185,8 +185,26 @@ Object.defineProperty(window,'THREE',{
           g.addColorStop(1, col3);
           ctx.fillStyle = g;
           ctx.fillRect(0,0,1,256);
-          obj.material.map = new window._THREE.CanvasTexture(c);
-          obj.material.color.set('#ffffff');
+          // No direct THREE reference available — reuse an existing texture instance's
+          // constructor from any material already in the scene, clone + repaint it.
+          var TextureCtor = null;
+          scene.traverse(function(o2) {
+            if (TextureCtor) return;
+            if (o2.isMesh && o2.material && o2.material.map) TextureCtor = o2.material.map.constructor;
+          });
+          if (TextureCtor) {
+            var tex = new TextureCtor(c);
+            tex.needsUpdate = true;
+            obj.material.map = tex;
+          } else {
+            // Fallback: no texture constructor found anywhere — blend the two colors flat
+            var r1=parseInt(col2.slice(1,3),16), g1=parseInt(col2.slice(3,5),16), b1=parseInt(col2.slice(5,7),16);
+            var r2=parseInt(col3.slice(1,3),16), g2=parseInt(col3.slice(3,5),16), b2=parseInt(col3.slice(5,7),16);
+            var mix = '#' + Math.round((r1+r2)/2).toString(16).padStart(2,'0') + Math.round((g1+g2)/2).toString(16).padStart(2,'0') + Math.round((b1+b2)/2).toString(16).padStart(2,'0');
+            obj.material.map = null;
+            obj.material.color.set(mix);
+          }
+          if (obj.material.map) obj.material.color.set('#ffffff');
         }
         obj.material.needsUpdate = true;
       });
