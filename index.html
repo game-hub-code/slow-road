@@ -170,11 +170,17 @@
 
       scene.traverse(function(obj) {
         if (!obj.isMesh || !obj.material || !obj.material.color) return;
-        // ponytail: skip only materials with a CUSTOM onBeforeCompile (terrain/sky/water/foliage
-        // set it as their own instance property). Every THREE.Material has a default no-op
-        // onBeforeCompile on its prototype, so a plain truthy check matched everything
-        // (including the car) -> color stopped applying. hasOwnProperty distinguishes
-        // "overridden on this instance" from "inherited default".
+        // ponytail: two-part filter to land on car-only.
+        // 1) size: skip big world meshes (road/terrain) via bounding sphere.
+        var geo = obj.geometry;
+        if (geo) {
+          if (!geo.boundingSphere) geo.computeBoundingSphere();
+          if (geo.boundingSphere && geo.boundingSphere.radius > 5) return;
+        }
+        // 2) shader: skip materials with a CUSTOM onBeforeCompile (terrain/sky/water/foliage
+        // set it as their own instance property; car doesn't). Plain truthy check matched
+        // every material (THREE.Material has a no-op default on its prototype) -> use
+        // hasOwnProperty to catch only overridden ones.
         if (Object.prototype.hasOwnProperty.call(obj.material, 'onBeforeCompile')) return;
 
         if (!isGrad) {
