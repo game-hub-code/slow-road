@@ -170,11 +170,16 @@
 
       scene.traverse(function(obj) {
         if (!obj.isMesh || !obj.material || !obj.material.color) return;
+        try {
         // ponytail: two-part filter to land on car-only.
         // 1) size: skip big world meshes (road/terrain) via bounding sphere.
         var geo = obj.geometry;
         if (geo) {
-          geo.computeBoundingSphere();
+          // ponytail: force-recompute, but guarded — computeBoundingSphere() can throw
+          // on non-standard geometry (instanced/particle buffers used by some shader
+          // effects), and an uncaught throw here aborts scene.traverse entirely, silently
+          // skipping every object after it (including possibly the car itself).
+          try { geo.computeBoundingSphere(); } catch (err) { /* fall through, treat as unknown-size, don't return early */ }
           if (geo.boundingSphere && geo.boundingSphere.radius > 5) return;
         }
         // 2) shader: skip materials with a CUSTOM onBeforeCompile (terrain/sky/water/foliage
@@ -217,6 +222,10 @@
           if (obj.material.map) obj.material.color.set('#ffffff');
         }
         obj.material.needsUpdate = true;
+        } catch (err) {
+          // ponytail: never let one bad mesh abort traversal for the rest of the scene
+          console.warn('[color-picker] skipped mesh due to error', err);
+        }
       });
     }
   }, 300);
