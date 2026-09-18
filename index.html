@@ -187,6 +187,15 @@
         // every material (THREE.Material has a no-op default on its prototype) -> use
         // hasOwnProperty to catch only overridden ones.
         if (Object.prototype.hasOwnProperty.call(obj.material, 'onBeforeCompile')) return;
+        // 3) userData fingerprint: terrain/road/foliage materials tag themselves with
+        // known uniform keys in userData (surfaceMap, fadeRockMap, roadBaseMap, rockMap,
+        // headlightPos, etc). userData survives Material.clone() even when onBeforeCompile
+        // (an own-property function) does not, so if the game clones the shared terrain
+        // material per chunk, check #2 above stops working but this still catches it.
+        var ud = obj.material.userData;
+        if (ud && (ud.surfaceMap || ud.fadeRockMap || ud.roadBaseMap || ud.rockMap ||
+                   ud.headlightPos || ud.cliffMap || ud.gravelMap || ud.shaleMap ||
+                   ud.subSurfaceMap)) return;
 
         if (!isGrad) {
           obj.material.map = null;
