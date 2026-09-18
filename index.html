@@ -174,7 +174,7 @@
         // 1) size: skip big world meshes (road/terrain) via bounding sphere.
         var geo = obj.geometry;
         if (geo) {
-          if (!geo.boundingSphere) geo.computeBoundingSphere();
+          geo.computeBoundingSphere();
           if (geo.boundingSphere && geo.boundingSphere.radius > 5) return;
         }
         // 2) shader: skip materials with a CUSTOM onBeforeCompile (terrain/sky/water/foliage
