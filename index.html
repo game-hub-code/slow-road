@@ -72,6 +72,25 @@ Object.defineProperty(window,'THREE',{
   }, 300);
   setTimeout(function(){ clearInterval(hideDonate); }, 15000);
 
+  // --- Hide coffee/heart donate icon in menu-bar-right ---
+  var hideCoffee = setInterval(function() {
+    var right = document.getElementById('menu-bar-right');
+    if (!right) return;
+    var found = false;
+    right.querySelectorAll('.menu-item, [title]').forEach(function(el) {
+      var title = (el.getAttribute('title') || '').toLowerCase();
+      var svg = el.querySelector('svg');
+      var svgHtml = svg ? svg.innerHTML.toLowerCase() : '';
+      if (title.indexOf('donat') !== -1 || title.indexOf('coffee') !== -1 || title.indexOf('support') !== -1 ||
+          svgHtml.indexOf('heart') !== -1) {
+        el.style.display = 'none';
+        found = true;
+      }
+    });
+    if (found) clearInterval(hideCoffee);
+  }, 300);
+  setTimeout(function(){ clearInterval(hideCoffee); }, 15000);
+
   // Wait for game UI to mount
   var t = setInterval(function() {
     var bar = document.getElementById('menu-bar-left');
