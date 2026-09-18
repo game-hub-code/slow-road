@@ -170,11 +170,12 @@
 
       scene.traverse(function(obj) {
         if (!obj.isMesh || !obj.material || !obj.material.color) return;
-        // ponytail: skip any material with a custom onBeforeCompile (terrain/sky/water/foliage
-        // all get one; the car material doesn't). Bounding-sphere radius false-matched small
-        // foliage meshes and nulling their .map killed USE_MAP, breaking their hardcoded
-        // map_fragment shader replacement (undeclared 'map'/'vUv' -> shader compile error).
-        if (obj.material.onBeforeCompile) return;
+        // ponytail: skip only materials with a CUSTOM onBeforeCompile (terrain/sky/water/foliage
+        // set it as their own instance property). Every THREE.Material has a default no-op
+        // onBeforeCompile on its prototype, so a plain truthy check matched everything
+        // (including the car) -> color stopped applying. hasOwnProperty distinguishes
+        // "overridden on this instance" from "inherited default".
+        if (Object.prototype.hasOwnProperty.call(obj.material, 'onBeforeCompile')) return;
 
         if (!isGrad) {
           obj.material.map = null;
