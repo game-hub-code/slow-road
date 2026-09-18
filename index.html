@@ -171,6 +171,29 @@
       scene.traverse(function(obj) {
         if (!obj.isMesh || !obj.material || !obj.material.color) return;
         try {
+        // --- DIAGNOSTIC (one-time): dump every candidate mesh's identifying traits so
+        // we can see exactly what the road mesh looks like instead of guessing. Remove
+        // this block once the real fix is in.
+        if (!window._cpDiagDone) {
+          window._cpDiagRows = window._cpDiagRows || [];
+          try {
+            var g = obj.geometry;
+            var bsRadius = null;
+            try { if (g) { g.computeBoundingSphere(); bsRadius = g.boundingSphere ? g.boundingSphere.radius : null; } } catch (e) { bsRadius = 'ERROR: ' + e.message; }
+            var vertCount = (g && g.attributes && g.attributes.position) ? g.attributes.position.count : null;
+            window._cpDiagRows.push({
+              matType: obj.material.type,
+              hasOwnOnBeforeCompile: Object.prototype.hasOwnProperty.call(obj.material, 'onBeforeCompile'),
+              userDataKeys: obj.material.userData ? Object.keys(obj.material.userData).join(',') : '',
+              boundingSphereRadius: bsRadius,
+              vertexCount: vertCount,
+              geoType: g ? g.type : null,
+              currentColorHex: obj.material.color ? obj.material.color.getHexString() : null,
+              hasMap: !!obj.material.map,
+              name: obj.name || '(unnamed)'
+            });
+          } catch (e) {}
+        }
         // ponytail: two-part filter to land on car-only.
         // 1) size: skip big world meshes (road/terrain) via bounding sphere.
         var geo = obj.geometry;
@@ -236,6 +259,11 @@
           console.warn('[color-picker] skipped mesh due to error', err);
         }
       });
+      if (!window._cpDiagDone && window._cpDiagRows && window._cpDiagRows.length) {
+        window._cpDiagDone = true;
+        console.log('[color-picker] DIAGNOSTIC: ' + window._cpDiagRows.length + ' candidate meshes colored this pass:');
+        console.table(window._cpDiagRows);
+      }
     }
   }, 300);
 })();
