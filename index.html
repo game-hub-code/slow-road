@@ -171,54 +171,14 @@
       scene.traverse(function(obj) {
         if (!obj.isMesh || !obj.material || !obj.material.color) return;
         try {
-        // --- DIAGNOSTIC (one-time): dump every candidate mesh's identifying traits so
-        // we can see exactly what the road mesh looks like instead of guessing. Remove
-        // this block once the real fix is in.
-        if (!window._cpDiagDone) {
-          window._cpDiagRows = window._cpDiagRows || [];
-          try {
-            var g = obj.geometry;
-            var bsRadius = null;
-            try { if (g) { g.computeBoundingSphere(); bsRadius = g.boundingSphere ? g.boundingSphere.radius : null; } } catch (e) { bsRadius = 'ERROR: ' + e.message; }
-            var vertCount = (g && g.attributes && g.attributes.position) ? g.attributes.position.count : null;
-            window._cpDiagRows.push({
-              matType: obj.material.type,
-              hasOwnOnBeforeCompile: Object.prototype.hasOwnProperty.call(obj.material, 'onBeforeCompile'),
-              userDataKeys: obj.material.userData ? Object.keys(obj.material.userData).join(',') : '',
-              boundingSphereRadius: bsRadius,
-              vertexCount: vertCount,
-              geoType: g ? g.type : null,
-              currentColorHex: obj.material.color ? obj.material.color.getHexString() : null,
-              hasMap: !!obj.material.map,
-              name: obj.name || '(unnamed)'
-            });
-          } catch (e) {}
-        }
-        // ponytail: two-part filter to land on car-only.
-        // 1) size: skip big world meshes (road/terrain) via bounding sphere.
-        var geo = obj.geometry;
-        if (geo) {
-          // ponytail: force-recompute, but guarded — computeBoundingSphere() can throw
-          // on non-standard geometry (instanced/particle buffers used by some shader
-          // effects), and an uncaught throw here aborts scene.traverse entirely, silently
-          // skipping every object after it (including possibly the car itself).
-          try { geo.computeBoundingSphere(); } catch (err) { /* fall through, treat as unknown-size, don't return early */ }
-          if (geo.boundingSphere && geo.boundingSphere.radius > 5) return;
-        }
-        // 2) shader: skip materials with a CUSTOM onBeforeCompile (terrain/sky/water/foliage
-        // set it as their own instance property; car doesn't). Plain truthy check matched
-        // every material (THREE.Material has a no-op default on its prototype) -> use
-        // hasOwnProperty to catch only overridden ones.
-        if (Object.prototype.hasOwnProperty.call(obj.material, 'onBeforeCompile')) return;
-        // 3) userData fingerprint: terrain/road/foliage materials tag themselves with
-        // known uniform keys in userData (surfaceMap, fadeRockMap, roadBaseMap, rockMap,
-        // headlightPos, etc). userData survives Material.clone() even when onBeforeCompile
-        // (an own-property function) does not, so if the game clones the shared terrain
-        // material per chunk, check #2 above stops working but this still catches it.
-        var ud = obj.material.userData;
-        if (ud && (ud.surfaceMap || ud.fadeRockMap || ud.roadBaseMap || ud.rockMap ||
-                   ud.headlightPos || ud.cliffMap || ud.gravelMap || ud.shaleMap ||
-                   ud.subSurfaceMap)) return;
+        // Verified via a live console.table dump of the actual scene graph:
+        // every car part (body, lights, shadow, wheels) has a real .name starting
+        // with 'z_' or '(f|b)wheel_'. Every terrain/road/foliage/sky mesh is
+        // '(unnamed)'. Roadside markers ('vergemarker_...') are named but a distinct
+        // prefix, so they're excluded too. This replaces the earlier bounding-sphere /
+        // onBeforeCompile / userData heuristics, which all proved unreliable.
+        var nm = obj.name || '';
+        if (!(nm.indexOf('z_') === 0 || nm.indexOf('bwheel_') === 0 || nm.indexOf('fwheel_') === 0)) return;
 
         if (!isGrad) {
           obj.material.map = null;
@@ -259,11 +219,6 @@
           console.warn('[color-picker] skipped mesh due to error', err);
         }
       });
-      if (!window._cpDiagDone && window._cpDiagRows && window._cpDiagRows.length) {
-        window._cpDiagDone = true;
-        console.log('[color-picker] DIAGNOSTIC: ' + window._cpDiagRows.length + ' candidate meshes colored this pass:');
-        console.table(window._cpDiagRows);
-      }
     }
   }, 300);
 })();
