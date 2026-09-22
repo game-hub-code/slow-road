@@ -281,14 +281,22 @@
 })();
 </script>
 <script>
-  var _orig = document.getElementById.bind(document);
+  // Auto-click when ready, then permanently suppress the container
   var _check = setInterval(function() {
-    var loader = _orig('splash-loader');
+    var loader = document.getElementById('splash-loader');
     if (loader && loader.classList.contains('splash-ready')) {
       loader.click();
-      var container = _orig('splash-container');
-      if (container) container.style.display = 'none';
       clearInterval(_check);
+
+      // Permanently hide — covers re-show from Esc or icon click
+      var style = document.createElement('style');
+      style.textContent = '#splash-container { display: none !important; }';
+      document.head.appendChild(style);
+
+      // Also block Esc from re-opening it
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') e.stopImmediatePropagation();
+      }, true);
     }
   }, 50);
 </script>
