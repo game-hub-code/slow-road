@@ -293,6 +293,37 @@
 })();
 </script>
 <script>
+(function() {
+  // --- Boost indicator: lightning bolt next to the speed readout, lit while boosting ---
+  var style = document.createElement('style');
+  style.textContent = [
+    '#ui-boost-icon{position:absolute;right:100%;top:0;height:100%;',
+    'display:flex;align-items:center;margin-right:.5vh;opacity:0;transition:opacity .15s ease-out;}',
+    '#ui-boost-icon svg{width:3vh;height:3vh;stroke:#fff;fill:#fff;}',
+    '#ui-boost-icon.boost-active{opacity:1;filter:drop-shadow(0 0 4px rgba(255,255,255,.8));}'
+  ].join('');
+  document.head.appendChild(style);
+
+  var setupBoostIcon = setInterval(function() {
+    var speedEl = document.getElementById('ui-speed');
+    if (!speedEl || document.getElementById('ui-boost-icon')) return;
+    clearInterval(setupBoostIcon);
+
+    var icon = document.createElement('div');
+    icon.id = 'ui-boost-icon';
+    icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>';
+    speedEl.insertBefore(icon, speedEl.firstChild);
+
+    (function poll() {
+      var boosting = !!(window._carState && window._carState.hasBoost);
+      icon.classList.toggle('boost-active', boosting);
+      requestAnimationFrame(poll);
+    })();
+  }, 300);
+  setTimeout(function(){ clearInterval(setupBoostIcon); }, 15000);
+})();
+</script>
+<script>
   // Auto-click when ready, then permanently suppress the container
   var _check = setInterval(function() {
     var loader = document.getElementById('splash-loader');

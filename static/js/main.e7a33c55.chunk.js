@@ -793,6 +793,7 @@
         }
       }
       var z = new Car();
+      window._carState = z;
       const k = 0.3,
         S = window.localStorage.getItem("settings-camera-mode") || 0;
       var O =
