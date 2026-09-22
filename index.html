@@ -279,6 +279,20 @@
 })();
 </script>
 <script>
+(function() {
+  // --- Hide the last icon (splash-toggle) in the bottom-right menu bar ---
+  var hideLastRightIcon = setInterval(function() {
+    var right = document.getElementById('menu-bar-right');
+    if (!right) return;
+    var items = right.querySelectorAll('.menu-item');
+    if (items.length === 0) return;
+    items[items.length - 1].style.display = 'none';
+    clearInterval(hideLastRightIcon);
+  }, 300);
+  setTimeout(function(){ clearInterval(hideLastRightIcon); }, 15000);
+})();
+</script>
+<script>
   // Auto-click when ready, then permanently suppress the container
   var _check = setInterval(function() {
     var loader = document.getElementById('splash-loader');
